@@ -2,19 +2,31 @@ resource "yandex_vpc_network" "main" {
   name = "main-network"
 }
 
-# Subnet A
+# Subnet A - Private
+
 resource "yandex_vpc_subnet" "foo1" {
   zone           = "ru-central1-a"
   network_id     = yandex_vpc_network.main.id
   v4_cidr_blocks = ["10.5.0.0/24"]
 }
 
-# Subnet B
+# Subnet B - Private (vm2,vm3)
+
 resource "yandex_vpc_subnet" "foo2" {
   zone           = "ru-central1-b"
   network_id     = yandex_vpc_network.main.id
-  v4_cidr_blocks = ["10.5.0.0/24"]
+  v4_cidr_blocks = ["10.5.1.0/24"]
 }
+
+# Subnet C - Public (Grafana,Kibana,application load balancer)
+
+resource "yandex_vpc_subnet" "foo3" {
+  name           = "public-subnet"
+  zone           = "ru-central1-c"
+  network_id     = yandex_vpc_network.main.id
+  v4_cidr_blocks = ["192.168.1.0/24"]
+}
+
 
 # Security Group
 
@@ -68,7 +80,7 @@ resource "yandex_compute_instance" "vm1" {
   network_interface {
     index     = 0
     subnet_id = yandex_vpc_subnet.foo1.id
-    nat       = true
+    nat       = false  
     security_group_ids = [yandex_vpc_security_group.default.id]
   }
   metadata = {
@@ -101,7 +113,7 @@ resource "yandex_compute_instance" "vm2" {
   network_interface {
     index     = 0
     subnet_id = yandex_vpc_subnet.foo2.id
-    nat       = true
+    nat       = false  
     security_group_ids = [yandex_vpc_security_group.default.id]
   }
   metadata = {
@@ -110,6 +122,73 @@ resource "yandex_compute_instance" "vm2" {
     ssh-keys = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
   }
 }
+
+#VM 3 - Monitoring Prometheus
+
+resource "yandex_compute_instance" "vm3" {
+  name        = "monitoring-prometheus"
+  platform_id = "standard-v3"
+  zone        = "ru-central1-b"
+
+  boot_disk {
+    initialize_params {
+      image_id = "fd8lcd9f54ldmonh1d72"
+      size     = 8
+    }
+  }
+
+  resources {
+    cores  = 2
+    memory = 4
+  }
+
+  # Network interface
+  network_interface {
+    index     = 0
+    subnet_id = yandex_vpc_subnet.foo2.id
+    nat       = false
+    security_group_ids = [yandex_vpc_security_group.default.id]
+  }
+  metadata = {
+    user-data = file("./cloud-init.yml")  # Используйте file() для чтения файла
+    serial-port-enable = 1
+    ssh-keys = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+  }
+}
+
+# VM 4 - Monitoring Grafana
+
+resource "yandex_compute_instance" "vm4" {
+  name        = "server1"
+  platform_id = "standard-v3"
+  zone        = "ru-central1-a"
+
+  boot_disk {
+    initialize_params {
+      image_id = "fd8lcd9f54ldmonh1d72"
+      size     = 8
+    }
+  }
+
+  resources {
+    cores  = 2
+    memory = 4
+  }
+
+  # Network interface
+  network_interface {
+    index     = 0
+    subnet_id = yandex_vpc_subnet.foo1.id
+    nat       = true  
+    security_group_ids = [yandex_vpc_security_group.default.id]
+  }
+  metadata = {
+    user-data = file("./cloud-init.yml")  # Используйте file() для чтения файла
+    serial-port-enable = 1
+    ssh-keys = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+  }
+}
+
 
 # Target Group
 

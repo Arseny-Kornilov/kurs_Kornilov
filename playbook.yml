@@ -1,12 +1,51 @@
 ---
+- name: Собрать информацию o хостах
+  hosts: all
+  gather_facts: yes
+
+# Play 1: Установка NGINX на веб-сервера
+- name: Установка и настройка NGINX
+  hosts: vm1,vm2
+  become: yes
+  
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Start Nginx
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Create test HTML page
+      copy:
+        content: "<h1>Welcome to {{ inventory_hostname }}</h1>"
+        dest: /var/www/html/index.html
+
+    - name: Open ports 80 and 443 in firewall
+      ufw:
+        port: "{{ item }}"
+        proto: tcp
+        state: enabled
+      loop:
+        - 80
+        - 443
+      when: ansible_os_family == "Debian"
+
+# Play 2: Установка Prometheus на мониторинг сервер
 - name: Установка и настройка Prometheus
   hosts: vm3
   become: yes
-  vars:
-    prometheus_port: 9090 
-
+  
   tasks:
-
     - name: Update apt cache
       apt:
         update_cache: yes
@@ -17,91 +56,162 @@
         name: prometheus
         state: present
 
-    - name: Запуск сервиса Prometheus
-      service:
+    - name: Configure Prometheus to collect metrics
+      copy:
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets: 
+                  - 'vm1:9100'   # ← Замените на реальные IP или DNS
+                  - 'vm2:9100'
+              scrape_interval: 10s
+
+            - job_name: 'nginxlog_exporter'
+              static_configs:
+                - targets:
+                  - 'vm1:4040'   # ← Замените на реальные IP или DNS
+                  - 'vm2:4040'
+              scrape_interval: 10s
+        dest: /etc/prometheus/prometheus.yml
+      notify: restart prometheus
+
+    - name: Start Prometheus service
+      systemd:
         name: prometheus
         state: started
         enabled: yes
 
-    - name: Проверка статуса Prometheus
-      shell: systemctl status prometheus
-      register: prometheus_status
-      failed_when: prometheus_status.rc != 0
+    - name: Open port 9090 for Prometheus
+      ufw:
+        port: "9090"
+        proto: tcp
+        state: enabled
+      when: ansible_os_family == "Debian"
 
-    - name: Настройка logs Prometheus
-      lineinfile:
-        path: /etc/nginx/sites-enabled/default
-        regexp: '^listen\s+80'
-        line: "listen {{ nginx_port }};"
-        backrefs: yes
-
-    - name: Перезапуск Prometheus после изменений
-      service:
+  handlers:
+    - name: restart prometheus
+      systemd:
         name: prometheus
-        state: reloaded
+        state: restarted
 
-
+# Play 3: Установка Node Exporter на веб-сервера
 - name: Установка Node Exporter
-- hosts: vm1,vm2
-  pre_tasks:
-    - name: Create node_exporter cert dir
-      file:
-        path: "/etc/node_exporter"
-        state: directory
-        owner: root
-        group: root
-
-    - name: Create cert and key
-      openssl_certificate:
-        path: /etc/node_exporter/tls.cert
-        csr_path: /etc/node_exporter/tls.csr
-        privatekey_path: /etc/node_exporter/tls.key
-        provider: selfsigned
-  roles:
-    - prometheus.prometheus.node_exporter
-  vars:
-    node_exporter_tls_server_config:
-      cert_file: /etc/node_exporter/tls.cert
-      key_file: /etc/node_exporter/tls.key
-    node_exporter_basic_auth_users:
-      randomuser: examplepassword
-
-
-- name: Установка nginxlog-exporter
-  hosts: vm3
+  hosts: vm1,vm2
   become: yes
   
   tasks:
-    - name: Скачать nginxlog-exporter
+    - name: Download Node Exporter
+      get_url:
+        url: https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz
+        dest: /tmp/node_exporter.tar.gz
+
+    - name: Extract Node Exporter
+      unarchive:
+        src: /tmp/node_exporter.tar.gz
+        dest: /tmp
+        remote_src: yes
+
+    - name: Copy Node Exporter binary
+      copy:
+        src: /tmp/node_exporter-1.6.1.linux-amd64/node_exporter
+        dest: /usr/local/bin/node_exporter
+        mode: '0755'
+        remote_src: yes
+
+    - name: Create node_exporter user
+      user:
+        name: node_exporter
+        system: yes
+        shell: /bin/false
+
+    - name: Create systemd service for Node Exporter
+      copy:
+        content: |
+          [Unit]
+          Description=Node Exporter
+          After=network.target
+          
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter
+          
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/node_exporter.service
+
+    - name: Start Node Exporter service
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Open port 9100 for Node Exporter
+      ufw:
+        port: "9100"
+        proto: tcp
+        state: enabled
+      when: ansible_os_family == "Debian"
+
+# Play 4: Установка nginxlog-exporter на веб-сервера
+- name: Установка nginxlog-exporter
+  hosts: vm1,vm2
+  become: yes
+  
+  tasks:
+    - name: Download nginxlog-exporter
       get_url:
         url: https://github.com/martin-helmich/prometheus-nginxlog-exporter/releases/download/v1.9.2/prometheus-nginxlog-exporter_1.9.2_linux_amd64.deb
         dest: /tmp/prometheus-nginxlog-exporter_1.9.2_linux_amd64.deb
         
-    - name: Установить скачанный deb-пакет
+    - name: Install nginxlog-exporter package
       apt:
         deb: /tmp/prometheus-nginxlog-exporter_1.9.2_linux_amd64.deb
         state: present
-      when: ansible_os_family == "Ubuntu"
+      when: ansible_os_family == "Debian"
 
-    - name: Запуск сервиса nginxlog-exporter
-      service:
-        name: prometheus
+    - name: Configure nginxlog-exporter
+      copy:
+        content: |
+          listen:
+            port: 4040
+            address: "0.0.0.0"
+          
+          namespaces:
+            - name: nginx
+              format: "$remote_addr - $remote_user [$time_local] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\""
+              source:
+                files:
+                  - /var/log/nginx/access.log
+        dest: /etc/prometheus-nginxlog-exporter.hcl
+      notify: restart nginxlog-exporter
+
+    - name: Start nginxlog-exporter service
+      systemd:
+        name: prometheus-nginxlog-exporter
         state: started
         enabled: yes
 
-    - name: Проверка статуса nginxlog-exporter
-      shell: systemctl status prometheus
-      register: nginxlog-exporter_status
-      failed_when: nginxlog-exporter.rc != 0   
+    - name: Open port 4040 for nginxlog-exporter
+      ufw:
+        port: "4040"
+        proto: tcp
+        state: enabled
+      when: ansible_os_family == "Debian"
 
-    - name: Настройка logs nginxlog-exporter
-      lineinfile:
-        path: /etc/nginx/sites-enabled/default
-        regexp: '^listen\s+80'
-        line: "listen {{ nginx_port }};"
-        backrefs: yes
-
-    - name: Перезапуск nginxlog-exporter после изменений
-      service:
-        name: nginxlog-exporter
-        state: reloaded  
+  handlers:
+    - name: restart nginxlog-exporter
+      systemd:
+        name: prometheus-nginxlog-exporter
+        state: restarted
