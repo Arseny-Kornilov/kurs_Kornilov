@@ -1,0 +1,107 @@
+---
+- name: Установка и настройка Prometheus
+  hosts: vm3
+  become: yes
+  vars:
+    prometheus_port: 9090 
+
+  tasks:
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Prometheus
+      apt:
+        name: prometheus
+        state: present
+
+    - name: Запуск сервиса Prometheus
+      service:
+        name: prometheus
+        state: started
+        enabled: yes
+
+    - name: Проверка статуса Prometheus
+      shell: systemctl status prometheus
+      register: prometheus_status
+      failed_when: prometheus_status.rc != 0
+
+    - name: Настройка logs Prometheus
+      lineinfile:
+        path: /etc/nginx/sites-enabled/default
+        regexp: '^listen\s+80'
+        line: "listen {{ nginx_port }};"
+        backrefs: yes
+
+    - name: Перезапуск Prometheus после изменений
+      service:
+        name: prometheus
+        state: reloaded
+
+
+- name: Установка Node Exporter
+- hosts: vm1,vm2
+  pre_tasks:
+    - name: Create node_exporter cert dir
+      file:
+        path: "/etc/node_exporter"
+        state: directory
+        owner: root
+        group: root
+
+    - name: Create cert and key
+      openssl_certificate:
+        path: /etc/node_exporter/tls.cert
+        csr_path: /etc/node_exporter/tls.csr
+        privatekey_path: /etc/node_exporter/tls.key
+        provider: selfsigned
+  roles:
+    - prometheus.prometheus.node_exporter
+  vars:
+    node_exporter_tls_server_config:
+      cert_file: /etc/node_exporter/tls.cert
+      key_file: /etc/node_exporter/tls.key
+    node_exporter_basic_auth_users:
+      randomuser: examplepassword
+
+
+- name: Установка nginxlog-exporter
+  hosts: vm3
+  become: yes
+  
+  tasks:
+    - name: Скачать nginxlog-exporter
+      get_url:
+        url: https://github.com/martin-helmich/prometheus-nginxlog-exporter/releases/download/v1.9.2/prometheus-nginxlog-exporter_1.9.2_linux_amd64.deb
+        dest: /tmp/prometheus-nginxlog-exporter_1.9.2_linux_amd64.deb
+        
+    - name: Установить скачанный deb-пакет
+      apt:
+        deb: /tmp/prometheus-nginxlog-exporter_1.9.2_linux_amd64.deb
+        state: present
+      when: ansible_os_family == "Ubuntu"
+
+    - name: Запуск сервиса nginxlog-exporter
+      service:
+        name: prometheus
+        state: started
+        enabled: yes
+
+    - name: Проверка статуса nginxlog-exporter
+      shell: systemctl status prometheus
+      register: nginxlog-exporter_status
+      failed_when: nginxlog-exporter.rc != 0   
+
+    - name: Настройка logs nginxlog-exporter
+      lineinfile:
+        path: /etc/nginx/sites-enabled/default
+        regexp: '^listen\s+80'
+        line: "listen {{ nginx_port }};"
+        backrefs: yes
+
+    - name: Перезапуск nginxlog-exporter после изменений
+      service:
+        name: nginxlog-exporter
+        state: reloaded  
