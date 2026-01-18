@@ -215,3 +215,211 @@
       systemd:
         name: prometheus-nginxlog-exporter
         state: restarted
+
+# Установка и настройка Grafana
+- name: Установка Grafana Enterprise 
+  hosts: grafana
+  become: yes
+  
+  vars:
+    prometheus_host: "vm3"  # или IP адрес Prometheus, например "10.128.0.12"
+    
+  tasks:
+    # Точное выполнение ваших команд
+    - name: Install dependencies
+      shell: |
+        apt-get update
+        apt-get install -y adduser libfontconfig1 musl
+      args:
+        warn: false
+        
+    - name: Download Grafana Enterprise
+      shell: |
+        wget https://dl.grafana.com/grafana-enterprise/release/12.3.1/grafana-enterprise_12.3.1_20271043721_linux_amd64.deb -O /tmp/grafana.deb
+      args:
+        creates: /tmp/grafana.deb  
+        
+    - name: Install Grafana
+      shell: dpkg -i /tmp/grafana.deb
+      args:
+        warn: false
+        
+    # Настройка Grafana
+    - name: Configure Prometheus datasource
+      copy:
+        content: |
+          # /etc/grafana/provisioning/datasources/prometheus.yml
+          apiVersion: 1
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              url: http://{{ prometheus_host }}:9090
+              access: proxy
+              isDefault: true
+        dest: /etc/grafana/provisioning/datasources/prometheus.yml
+      
+    - name: Start Grafana
+      systemd:
+        name: grafana-server
+        state: started
+        enabled: yes
+        
+    - name: Configure firewall
+      ufw:
+        port: "3000"
+        proto: tcp
+        state: enabled
+      when: ansible_os_family == "Ubuntu"
+
+#  ElasticSearch
+- name: Простая установка Elasticsearch
+  hosts: vm5
+  become: yes
+  
+  tasks:
+    # 1. Добавить репозиторий
+    - name: Add repository
+      shell: |
+        wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -
+        echo "deb https://mirror.yandex.ru/mirrors/elastic/8/ stable main" | tee -a /etc/apt/sources.list.d/elastic.list
+        apt update
+        
+    # 2. Установить Java
+    - name: Install Java 17
+      apt:
+        name: openjdk-17-jdk
+        state: present
+        
+    # 3. Установить Elasticsearch
+    - name: Install Elasticsearch
+      apt:
+        name: elasticsearch
+        state: present
+        
+    # 4. Запустить
+    - name: Start Elasticsearch
+      systemd:
+        name: elasticsearch
+        state: started
+        enabled: yes
+
+#Filebeat 
+- name: Простая установка Filebeat
+  hosts: vm1,vm2
+  become: yes
+  
+  vars:
+    elasticsearch_ip: "vm5"
+    
+  tasks:
+    # 1. Добавить репозиторий
+    - name: Add Elastic repository
+      shell: |
+        wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -
+        echo "deb https://mirror.yandex.ru/mirrors/elastic/8/ stable main" | tee /etc/apt/sources.list.d/elastic.list
+        apt update
+        
+    # 2. Установить Filebeat
+    - name: Install Filebeat
+      apt:
+        name: filebeat
+        state: present
+        
+    # 3. Базовая настройка
+    - name: Configure Filebeat
+      copy:
+        content: |
+          filebeat.inputs:
+            - type: log
+              paths:
+                - /var/log/nginx/access.log
+              tags: ["nginx-access"]
+            - type: log
+              paths:
+                - /var/log/nginx/error.log
+              tags: ["nginx-error"]
+          
+          output.elasticsearch:
+            hosts: ["{{ elasticsearch_ip }}:9200"]
+        dest: /etc/filebeat/filebeat.yml
+        
+    # 4. Запустить
+    - name: Start Filebeat
+      systemd:
+        name: filebeat
+        state: started
+        enabled: yes
+
+# Kibana
+- name: Простая установка Kibana из зеркала Yandex
+  hosts: kibana  
+  become: yes
+  
+  vars:
+    elasticsearch_ip: "elasticsearch"  
+    
+  tasks:
+    # 1. Добавить репозиторий Elastic из зеркала Yandex
+    - name: Add repository
+      shell: |
+        wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | apt-key add -
+        echo "deb https://mirror.yandex.ru/mirrors/elastic/8/ stable main" | tee -a /etc/apt/sources.list.d/elastic.list
+        apt update
+        
+    # 2. Установить Kibana
+    - name: Install Kibana
+      apt:
+        name: kibana
+        state: present
+        
+    # 3. Простая настройка подключения к Elasticsearch
+    - name: Configure Kibana connection to Elasticsearch
+      copy:
+        content: |
+          # Kibana Configuration
+          server.host: "0.0.0.0"
+          server.port: 5601
+          
+          # Подключение к Elasticsearch
+          elasticsearch.hosts: ["http://{{ elasticsearch_ip }}:9200"]
+          
+          # Если у Elasticsearch отключена безопасность (xpack.security.enabled: false)
+          # Оставьте эти строки пустыми:
+          elasticsearch.username: ""
+          elasticsearch.password: ""
+          
+          # Отключаем security, если она не нужна
+          xpack.security.enabled: false
+        dest: /etc/kibana/kibana.yml
+        owner: kibana
+        group: kibana
+        mode: '0644'
+      notify: restart kibana
+        
+    # 4. Запустить Kibana
+    - name: Start and enable Kibana
+      systemd:
+        name: kibana
+        state: started
+        enabled: yes
+        
+    # 5. Открыть порт в фаерволе
+    - name: Open Kibana port
+      ufw:
+        port: "5601"
+        proto: tcp
+        state: enabled
+      when: ansible_os_family == "Ubuntu"
+        
+    # 6. Проверить что Kibana запустилась
+    - name: Wait for Kibana
+      wait_for:
+        port: 5601
+        delay: 5
+        timeout: 60
+           
+  handlers:
+    - name: restart kibana
+      systemd:
+        name: kibana
+        state: restarted        

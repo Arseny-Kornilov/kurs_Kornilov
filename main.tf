@@ -31,31 +31,31 @@ resource "yandex_vpc_subnet" "foo3" {
 # Security Group
 
 resource "yandex_vpc_security_group" "default" {
-  name = "default-sg"
+  name       = "default-sg"
   network_id = yandex_vpc_network.main.id
 
   ingress {
-    description = "Allow SSH access"
-    protocol = "TCP"
+    description    = "Allow SSH access"
+    protocol       = "TCP"
     v4_cidr_blocks = ["0.0.0.0/0"]
-    port = 22
+    port           = 22
   }
 
   ingress {
-    description = "Allow HTTP access"
-    protocol = "TCP"
+    description    = "Allow HTTP access"
+    protocol       = "TCP"
     v4_cidr_blocks = ["0.0.0.0/0"]
-    port = 80
+    port           = 80
   }
 
   egress {
-    description = "Allow all outbound traffic"
-    protocol = "ANY"
+    description    = "Allow all outbound traffic"
+    protocol       = "ANY"
     v4_cidr_blocks = ["0.0.0.0/0"]
-    from_port = 0
-    to_port = 65535
+    from_port      = 0
+    to_port        = 65535
   }
-} 
+}
 
 # VM 1 - Web Server
 
@@ -78,15 +78,15 @@ resource "yandex_compute_instance" "vm1" {
 
   # Network interface
   network_interface {
-    index     = 0
-    subnet_id = yandex_vpc_subnet.foo1.id
-    nat       = false  
+    index              = 0
+    subnet_id          = yandex_vpc_subnet.foo1.id
+    nat                = false
     security_group_ids = [yandex_vpc_security_group.default.id]
   }
   metadata = {
-    user-data = file("./cloud-init.yml")  # Используйте file() для чтения файла
+    user-data          = file("./cloud-init.yml") # Используйте file() для чтения файла
     serial-port-enable = 1
-    ssh-keys = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
   }
 }
 
@@ -111,22 +111,22 @@ resource "yandex_compute_instance" "vm2" {
 
   # Network interface
   network_interface {
-    index     = 0
-    subnet_id = yandex_vpc_subnet.foo2.id
-    nat       = false  
+    index              = 0
+    subnet_id          = yandex_vpc_subnet.foo2.id
+    nat                = false
     security_group_ids = [yandex_vpc_security_group.default.id]
   }
   metadata = {
-    user-data = file("./cloud-init.yml")  # Используйте file() для чтения файла
+    user-data          = file("./cloud-init.yml") # Используйте file() для чтения файла
     serial-port-enable = 1
-    ssh-keys = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
   }
 }
 
 #VM 3 - Monitoring Prometheus
 
 resource "yandex_compute_instance" "vm3" {
-  name        = "monitoring-prometheus"
+  name        = "prometheus"
   platform_id = "standard-v3"
   zone        = "ru-central1-b"
 
@@ -144,29 +144,29 @@ resource "yandex_compute_instance" "vm3" {
 
   # Network interface
   network_interface {
-    index     = 0
-    subnet_id = yandex_vpc_subnet.foo2.id
-    nat       = false
+    index              = 0
+    subnet_id          = yandex_vpc_subnet.foo2.id
+    nat                = false
     security_group_ids = [yandex_vpc_security_group.default.id]
   }
   metadata = {
-    user-data = file("./cloud-init.yml")  # Используйте file() для чтения файла
+    user-data          = file("./cloud-init.yml") # Используйте file() для чтения файла
     serial-port-enable = 1
-    ssh-keys = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
   }
 }
 
 # VM 4 - Monitoring Grafana
 
 resource "yandex_compute_instance" "vm4" {
-  name        = "server1"
+  name        = "grafana"
   platform_id = "standard-v3"
-  zone        = "ru-central1-a"
+  zone        = "ru-central1-c"
 
   boot_disk {
     initialize_params {
       image_id = "fd8lcd9f54ldmonh1d72"
-      size     = 8
+      size     = 12
     }
   }
 
@@ -177,15 +177,81 @@ resource "yandex_compute_instance" "vm4" {
 
   # Network interface
   network_interface {
-    index     = 0
-    subnet_id = yandex_vpc_subnet.foo1.id
-    nat       = true  
+    index              = 0
+    subnet_id          = yandex_vpc_subnet.foo1.id
+    nat                = true
     security_group_ids = [yandex_vpc_security_group.default.id]
   }
   metadata = {
-    user-data = file("./cloud-init.yml")  # Используйте file() для чтения файла
+    user-data          = file("./cloud-init.yml") 
     serial-port-enable = 1
-    ssh-keys = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+  }
+}
+
+#VM 5 - Monitoring ElasticSearch
+
+resource "yandex_compute_instance" "vm5" {
+  name        = "elasticsearch"
+  platform_id = "standard-v3"
+  zone        = "ru-central1-a"
+
+  boot_disk {
+    initialize_params {
+      image_id = "fd8lcd9f54ldmonh1d72"
+      size     = 12
+    }
+  }
+
+  resources {
+    cores  = 4
+    memory = 8
+  }
+
+  # Network interface
+  network_interface {
+    index              = 0
+    subnet_id          = yandex_vpc_subnet.foo1.id
+    nat                = true
+    security_group_ids = [yandex_vpc_security_group.default.id]
+  }
+  metadata = {
+    user-data          = file("./cloud-init.yml") 
+    serial-port-enable = 1
+    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+  }
+}
+
+#VM 6 - Monitoring Kibana
+
+resource "yandex_compute_instance" "vm6" {
+  name        = "kibana"
+  platform_id = "standard-v3"
+  zone        = "ru-central1-c"
+
+  boot_disk {
+    initialize_params {
+      image_id = "fd8lcd9f54ldmonh1d72"
+      size     = 12
+    }
+  }
+
+  resources {
+    cores  = 4
+    memory = 8
+  }
+
+  # Network interface
+  network_interface {
+    index              = 0
+    subnet_id          = yandex_vpc_subnet.foo1.id
+    nat                = true
+    security_group_ids = [yandex_vpc_security_group.default.id]
+  }
+  metadata = {
+    user-data          = file("./cloud-init.yml") 
+    serial-port-enable = 1
+    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
   }
 }
 
@@ -199,11 +265,11 @@ resource "yandex_lb_target_group" "tg" {
     for_each = [
       yandex_compute_instance.vm1,
       yandex_compute_instance.vm2
-  ]
-  
+    ]
+
     content {
-      subnet_id    = target.value.network_interface[0].subnet_id
-      address      = target.value.network_interface[0].ip_address
+      subnet_id = target.value.network_interface[0].subnet_id
+      address   = target.value.network_interface[0].ip_address
     }
   }
 }
@@ -212,21 +278,21 @@ resource "yandex_lb_target_group" "tg" {
 
 resource "yandex_alb_backend_group" "https_backend_group" {
   name = "https-backend-group"
-  
+
   http_backend {
     name             = "https-backend"
     port             = 80
     target_group_ids = [yandex_lb_target_group.tg.id]
-    
+
     healthcheck {
-      timeout   = "1s"
-      interval  = "2s"
-      
+      timeout  = "1s"
+      interval = "2s"
+
 
       http_healthcheck {
         path = "/"
       }
-    } 
+    }
   }
 }
 
@@ -239,16 +305,16 @@ resource "yandex_alb_http_router" "my_router" {
 resource "yandex_alb_virtual_host" "my_virtual_host" {
   name           = "my-virtual-host"
   http_router_id = yandex_alb_http_router.my_router.id
-  
-  authority = ["*"]  
-  
+
+  authority = ["*"]
+
   route {
     name = "root-route"
-    
+
     http_route {
       http_match {
         path {
-           exact = "/"  
+          exact = "/"
         }
       }
       http_route_action {
