@@ -5,7 +5,7 @@
 
 # Play 1: Установка NGINX на веб-сервера
 - name: Установка и настройка NGINX
-  hosts: vm1,vm2
+  hosts: server1,server2
   become: yes
   
   tasks:
@@ -42,7 +42,7 @@
 
 # Play 2: Установка Prometheus на мониторинг сервер
 - name: Установка и настройка Prometheus
-  hosts: vm3
+  hosts: prometheus
   become: yes
   
   tasks:
@@ -105,7 +105,7 @@
 
 # Play 3: Установка Node Exporter на веб-сервера
 - name: Установка Node Exporter
-  hosts: vm1,vm2
+  hosts: server1,server2
   become: yes
   
   tasks:
@@ -166,7 +166,7 @@
 
 # Play 4: Установка nginxlog-exporter на веб-сервера
 - name: Установка nginxlog-exporter
-  hosts: vm1,vm2
+  hosts: server1,server2
   become: yes
   
   tasks:
@@ -273,7 +273,7 @@
 
 #  ElasticSearch
 - name: Простая установка Elasticsearch
-  hosts: vm5
+  hosts: elasticsearch
   become: yes
   
   tasks:
@@ -305,7 +305,7 @@
 
 #Filebeat 
 - name: Простая установка Filebeat
-  hosts: vm1,vm2
+  hosts: server1,server2
   become: yes
   
   vars:
