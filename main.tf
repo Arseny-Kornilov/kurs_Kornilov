@@ -37,7 +37,7 @@ resource "yandex_vpc_security_group" "private_network_sg" {
   ingress {
     description    = "Allow all inside private subnet"
     protocol       = "ANY"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
   }
 
   ingress {
@@ -71,7 +71,7 @@ resource "yandex_vpc_security_group" "bastion_sg" {
   egress {
     description    = "Allow SSH to private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 22
   }
 
@@ -94,7 +94,7 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   ingress {
     description    = "Allow HTTP from Application Load Balancer"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.public.v4_cidr_blocks[0]] # Публичная подсеть ALB
+    v4_cidr_blocks = [yandex_vpc_subnet.foo3.v4_cidr_blocks[0]] # Публичная подсеть ALB
     port           = 80
   }
 
@@ -102,7 +102,7 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   ingress {
     description    = "Allow SSH from private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 22
   }
 
@@ -110,14 +110,14 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   ingress {
     description    = "Allow Node Exporter from monitoring subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]] # Prometheus тоже в приватной
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]] # Prometheus тоже в приватной
     port           = 9100
   }
 
   ingress {
     description    = "Allow Nginx Log Exporter from monitoring subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 4040
   }
 
@@ -125,7 +125,7 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   egress {
     description    = "Allow sending logs to Elasticsearch"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]] # Elasticsearch в приватной
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]] # Elasticsearch в приватной
     port           = 9200
   }
 }
@@ -140,7 +140,7 @@ resource "yandex_vpc_security_group" "prometheus_sg" {
   ingress {
     description    = "Allow Prometheus UI from private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 9090
   }
 
@@ -148,14 +148,14 @@ resource "yandex_vpc_security_group" "prometheus_sg" {
   egress {
     description    = "Allow to scrape web servers"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 9100
   }
 
   egress {
     description    = "Allow to scrape nginx logs"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 4040
   }
 }
@@ -170,7 +170,7 @@ resource "yandex_vpc_security_group" "elasticsearch_sg" {
   ingress {
     description    = "Allow Elasticsearch API from private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]] # Веб-серверы в приватной
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]] # Веб-серверы в приватной
     port           = 9200
   }
 
@@ -178,7 +178,7 @@ resource "yandex_vpc_security_group" "elasticsearch_sg" {
   ingress {
     description    = "Allow Kibana access from public subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.public.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo3.v4_cidr_blocks[0]]
     port           = 9200
   }
 
@@ -210,7 +210,7 @@ resource "yandex_vpc_security_group" "grafana_sg" {
   egress {
     description    = "Allow connection to Prometheus"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 9090
   }
 }
@@ -241,7 +241,7 @@ resource "yandex_vpc_security_group" "kibana_sg" {
   egress {
     description    = "Allow connection to Elasticsearch"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 9200
   }
 }
@@ -272,7 +272,7 @@ resource "yandex_vpc_security_group" "alb_sg" {
   egress {
     description    = "Allow to web servers"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.private.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
     port           = 80
   }
 }
@@ -608,7 +608,7 @@ resource "yandex_alb_load_balancer" "web_alb" {
     }
 
     http {
-      auto_http_handler {
+      handler {
         http_router_id = yandex_alb_http_router.my_router.id
       }
     }
