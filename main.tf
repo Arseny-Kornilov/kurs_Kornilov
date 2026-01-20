@@ -12,17 +12,17 @@ resource "yandex_vpc_subnet" "foo1" {
 
 # Subnet B - Private (vm2,vm3)
 
-resource "yandex_vpc_subnet" "foo2" {
+resource "yandex_vpc_subnet" "foo2_new" {
   zone           = "ru-central1-b"
   network_id     = yandex_vpc_network.main.id
-  v4_cidr_blocks = ["10.5.1.0/24"]
+  v4_cidr_blocks = ["10.7.0.0/24"]
 }
 
 # Subnet C - Public (Grafana,Kibana,application load balancer)
 
 resource "yandex_vpc_subnet" "foo3" {
   name           = "public-subnet"
-  zone           = "ru-central1-c"
+  zone           = "ru-central1-d"
   network_id     = yandex_vpc_network.main.id
   v4_cidr_blocks = ["192.168.1.0/24"]
 }
@@ -37,7 +37,7 @@ resource "yandex_vpc_security_group" "private_network_sg" {
   ingress {
     description    = "Allow all inside private subnet"
     protocol       = "ANY"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
   }
 
   ingress {
@@ -71,7 +71,7 @@ resource "yandex_vpc_security_group" "bastion_sg" {
   egress {
     description    = "Allow SSH to private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 22
   }
 
@@ -94,7 +94,7 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   ingress {
     description    = "Allow HTTP from Application Load Balancer"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo3.v4_cidr_blocks[0]] # Публичная подсеть ALB
+    v4_cidr_blocks = ["192.168.1.0/24"] # Публичная подсеть ALB
     port           = 80
   }
 
@@ -102,7 +102,7 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   ingress {
     description    = "Allow SSH from private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 22
   }
 
@@ -110,14 +110,14 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   ingress {
     description    = "Allow Node Exporter from monitoring subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]] # Prometheus тоже в приватной
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]] # Prometheus тоже в приватной
     port           = 9100
   }
 
   ingress {
     description    = "Allow Nginx Log Exporter from monitoring subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 4040
   }
 
@@ -125,7 +125,7 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   egress {
     description    = "Allow sending logs to Elasticsearch"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]] # Elasticsearch в приватной
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]] # Elasticsearch в приватной
     port           = 9200
   }
 }
@@ -140,7 +140,7 @@ resource "yandex_vpc_security_group" "prometheus_sg" {
   ingress {
     description    = "Allow Prometheus UI from private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 9090
   }
 
@@ -148,14 +148,14 @@ resource "yandex_vpc_security_group" "prometheus_sg" {
   egress {
     description    = "Allow to scrape web servers"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 9100
   }
 
   egress {
     description    = "Allow to scrape nginx logs"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 4040
   }
 }
@@ -170,7 +170,7 @@ resource "yandex_vpc_security_group" "elasticsearch_sg" {
   ingress {
     description    = "Allow Elasticsearch API from private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]] # Веб-серверы в приватной
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]] # Веб-серверы в приватной
     port           = 9200
   }
 
@@ -210,7 +210,7 @@ resource "yandex_vpc_security_group" "grafana_sg" {
   egress {
     description    = "Allow connection to Prometheus"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 9090
   }
 }
@@ -241,7 +241,7 @@ resource "yandex_vpc_security_group" "kibana_sg" {
   egress {
     description    = "Allow connection to Elasticsearch"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 9200
   }
 }
@@ -272,7 +272,7 @@ resource "yandex_vpc_security_group" "alb_sg" {
   egress {
     description    = "Allow to web servers"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
     port           = 80
   }
 }
@@ -287,7 +287,7 @@ resource "yandex_compute_instance" "vm1" {
   boot_disk {
     initialize_params {
       image_id = "fd8lcd9f54ldmonh1d72"
-      size     = 8
+      size     = 10
     }
   }
 
@@ -323,7 +323,7 @@ resource "yandex_compute_instance" "vm2" {
   boot_disk {
     initialize_params {
       image_id = "fd8lcd9f54ldmonh1d72"
-      size     = 8
+      size     = 10
     }
   }
 
@@ -335,7 +335,7 @@ resource "yandex_compute_instance" "vm2" {
   # Network interface
   network_interface {
     index     = 0
-    subnet_id = yandex_vpc_subnet.foo2.id
+    subnet_id = yandex_vpc_subnet.foo2_new.id
     nat       = false
     security_group_ids = [
       yandex_vpc_security_group.private_network_sg.id,
@@ -359,7 +359,7 @@ resource "yandex_compute_instance" "vm3" {
   boot_disk {
     initialize_params {
       image_id = "fd8lcd9f54ldmonh1d72"
-      size     = 8
+      size     = 12
     }
   }
 
@@ -371,7 +371,7 @@ resource "yandex_compute_instance" "vm3" {
   # Network interface
   network_interface {
     index     = 0
-    subnet_id = yandex_vpc_subnet.foo2.id
+    subnet_id = yandex_vpc_subnet.foo2_new.id
     nat       = false
     security_group_ids = [
       yandex_vpc_security_group.private_network_sg.id,
@@ -390,7 +390,7 @@ resource "yandex_compute_instance" "vm3" {
 resource "yandex_compute_instance" "vm4" {
   name        = "grafana"
   platform_id = "standard-v3"
-  zone        = "ru-central1-c"
+  zone        = "ru-central1-d"
 
   boot_disk {
     initialize_params {
@@ -423,7 +423,7 @@ resource "yandex_compute_instance" "vm4" {
 resource "yandex_compute_instance" "vm5" {
   name        = "elasticsearch"
   platform_id = "standard-v3"
-  zone        = "ru-central1-a"
+  zone        = "ru-central1-b"
 
   boot_disk {
     initialize_params {
@@ -440,7 +440,7 @@ resource "yandex_compute_instance" "vm5" {
   # Network interface
   network_interface {
     index     = 0
-    subnet_id = yandex_vpc_subnet.foo2.id
+    subnet_id = yandex_vpc_subnet.foo2_new.id
     nat       = false
     security_group_ids = [
       yandex_vpc_security_group.private_network_sg.id,
@@ -459,7 +459,7 @@ resource "yandex_compute_instance" "vm5" {
 resource "yandex_compute_instance" "vm6" {
   name        = "kibana"
   platform_id = "standard-v3"
-  zone        = "ru-central1-c"
+  zone        = "ru-central1-d"
 
   boot_disk {
     initialize_params {
@@ -492,7 +492,7 @@ resource "yandex_compute_instance" "vm6" {
 resource "yandex_compute_instance" "bastion" {
   name        = "bastion-host"
   platform_id = "standard-v3"
-  zone        = "ru-central1-c"
+  zone        = "ru-central1-d"
 
   resources {
     cores  = 2
@@ -522,34 +522,31 @@ resource "yandex_compute_instance" "bastion" {
 resource "yandex_lb_target_group" "tg" {
   name = "target-group"
 
-  dynamic "target" {
-    for_each = [
-      yandex_compute_instance.vm1,
-      yandex_compute_instance.vm2
-    ]
+  target {
+    subnet_id = yandex_vpc_subnet.foo1.id  # Подсеть ВМ1 (ru-central1-a)
+    address   = "10.5.0.30"              # Приватный IP ВМ1
+  }
 
-    content {
-      subnet_id = target.value.network_interface[0].subnet_id
-      address   = target.value.network_interface[0].ip_address
-    }
+  target {
+    subnet_id = yandex_vpc_subnet.foo2_new.id  # Подсеть ВМ2 (ru-central1-d)
+    address   = "10.7.0.13"              # Приватный IP ВМ2
   }
 }
 
+
 # Backend Group
 
-resource "yandex_alb_backend_group" "https_backend_group" {
-  name = "https-backend-group"
-
+resource "yandex_alb_backend_group" "web_backend" {
+  name = "web-backend-group"  
+  depends_on = [yandex_lb_target_group.tg]
   http_backend {
-    name             = "https-backend"
+    name             = "web-backend"
     port             = 80
     target_group_ids = [yandex_lb_target_group.tg.id]
 
     healthcheck {
       timeout  = "1s"
       interval = "2s"
-
-
       http_healthcheck {
         path = "/"
       }
@@ -579,7 +576,7 @@ resource "yandex_alb_virtual_host" "my_virtual_host" {
         }
       }
       http_route_action {
-        backend_group_id = yandex_alb_backend_group.https_backend_group.id
+        backend_group_id = yandex_alb_backend_group.web_backend.id
       }
     }
   }
@@ -593,7 +590,7 @@ resource "yandex_alb_load_balancer" "web_alb" {
 
   allocation_policy {
     location {
-      zone_id   = "ru-central1-c"
+      zone_id   = "ru-central1-d"
       subnet_id = yandex_vpc_subnet.foo3.id
     }
   }
