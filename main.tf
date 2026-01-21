@@ -528,7 +528,7 @@ resource "yandex_lb_target_group" "tg" {
   }
 
   target {
-    subnet_id = yandex_vpc_subnet.foo2_new.id  # Подсеть ВМ2 (ru-central1-d)
+    subnet_id = yandex_vpc_subnet.foo2_new.id  # Подсеть ВМ2 (ru-central1-b)
     address   = "10.7.0.13"              # Приватный IP ВМ2
   }
 }
