@@ -549,8 +549,13 @@ resource "yandex_alb_target_group" "tg" {
   }
 
   target {
+<<<<<<< HEAD
     subnet_id  = yandex_vpc_subnet.foo2_new.id
     ip_address = yandex_compute_instance.vm2.network_interface[0].ip_address
+=======
+    subnet_id = yandex_vpc_subnet.foo2_new.id  # Подсеть ВМ2 (ru-central1-b)
+    address   = "10.7.0.13"              # Приватный IP ВМ2
+>>>>>>> 39d06b4605dadd56418f29c79fec1996cbd0bcf1
   }
 }
 # Backend Group
