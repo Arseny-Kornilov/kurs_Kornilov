@@ -2,12 +2,28 @@ resource "yandex_vpc_network" "main" {
   name = "main-network"
 }
 
+resource "yandex_vpc_gateway" "nat_gateway" {
+  name = "nat-gateway"
+  shared_egress_gateway {}
+}
+
+resource "yandex_vpc_route_table" "main_rt" {
+  name       = "main-route-table"
+  network_id = yandex_vpc_network.main.id
+
+  static_route {
+    destination_prefix = "0.0.0.0/0"
+    gateway_id        = yandex_vpc_gateway.nat_gateway.id
+  }
+}
+
 # Subnet A - Private
 
 resource "yandex_vpc_subnet" "foo1" {
   zone           = "ru-central1-a"
   network_id     = yandex_vpc_network.main.id
   v4_cidr_blocks = ["10.5.0.0/24"]
+  route_table_id = yandex_vpc_route_table.main_rt.id
 }
 
 # Subnet B - Private (vm2,vm3)
@@ -16,6 +32,7 @@ resource "yandex_vpc_subnet" "foo2_new" {
   zone           = "ru-central1-b"
   network_id     = yandex_vpc_network.main.id
   v4_cidr_blocks = ["10.7.0.0/24"]
+  route_table_id = yandex_vpc_route_table.main_rt.id
 }
 
 # Subnet C - Public (Grafana,Kibana,application load balancer)
@@ -92,17 +109,21 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
 
   # HTTP/HTTPS от ALB (публичная подсеть)
   ingress {
-    description    = "Allow HTTP from Application Load Balancer"
-    protocol       = "TCP"
-    v4_cidr_blocks = ["192.168.1.0/24"] # Публичная подсеть ALB
-    port           = 80
+    description       = "Allow HTTP from ALB SG"
+    protocol          = "TCP"
+    security_group_id = yandex_vpc_security_group.alb_sg.id
+    port              = 80
   }
 
   # SSH только из приватной подсети (для администрирования)
   ingress {
     description    = "Allow SSH from private subnet"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [   
+      yandex_vpc_subnet.foo1.v4_cidr_blocks[0],        # ru-central1-a
+      yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0],
+      yandex_vpc_subnet.foo3.v4_cidr_blocks[0], 
+    ]
     port           = 22
   }
 
@@ -519,37 +540,33 @@ resource "yandex_compute_instance" "bastion" {
 
 # Target Group
 
-resource "yandex_lb_target_group" "tg" {
+resource "yandex_alb_target_group" "tg" {
   name = "target-group"
 
   target {
-    subnet_id = yandex_vpc_subnet.foo1.id  # Подсеть ВМ1 (ru-central1-a)
-    address   = "10.5.0.30"              # Приватный IP ВМ1
+    subnet_id  = yandex_vpc_subnet.foo1.id
+    ip_address = yandex_compute_instance.vm1.network_interface[0].ip_address
   }
 
   target {
-    subnet_id = yandex_vpc_subnet.foo2_new.id  # Подсеть ВМ2 (ru-central1-d)
-    address   = "10.7.0.13"              # Приватный IP ВМ2
+    subnet_id  = yandex_vpc_subnet.foo2_new.id
+    ip_address = yandex_compute_instance.vm2.network_interface[0].ip_address
   }
 }
-
-
 # Backend Group
 
 resource "yandex_alb_backend_group" "web_backend" {
-  name = "web-backend-group"  
-  depends_on = [yandex_lb_target_group.tg]
+  name = "web-backend-group"
+
   http_backend {
     name             = "web-backend"
     port             = 80
-    target_group_ids = [yandex_lb_target_group.tg.id]
+    target_group_ids = [yandex_alb_target_group.tg.id]
 
     healthcheck {
       timeout  = "1s"
       interval = "2s"
-      http_healthcheck {
-        path = "/"
-      }
+      http_healthcheck { path = "/" }
     }
   }
 }

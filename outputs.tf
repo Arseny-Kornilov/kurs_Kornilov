@@ -28,3 +28,8 @@ output "vm6_internal_ip" {
   description = "Internal IP address of Kibana server"
   value       = yandex_compute_instance.vm6.network_interface[0].ip_address
 }
+
+output "bastion_external_ip" {
+  description = "External IP address of Bastion host"
+  value       = yandex_compute_instance.bastion.network_interface[0].nat_ip_address
+}
