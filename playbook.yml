@@ -71,15 +71,15 @@
             - job_name: 'node_exporter'
               static_configs:
                 - targets: 
-                  - '{{ hostvars['vm1'].ansible_default_ipv4.address }}:9100'
-                  - '{{ hostvars['vm2'].ansible_default_ipv4.address }}:9100'
+                  - '{{ hostvars['server1'].ansible_default_ipv4.address }}:9100'
+                  - '{{ hostvars['server2'].ansible_default_ipv4.address }}:9100'
               scrape_interval: 10s
 
             - job_name: 'nginxlog_exporter'
               static_configs:
                 - targets:
-                  - '{{ hostvars['vm1'].ansible_default_ipv4.address }}:4040'
-                  - '{{ hostvars['vm2'].ansible_default_ipv4.address }}:4040'
+                  - '{{ hostvars['server1'].ansible_default_ipv4.address }}:4040'
+                  - '{{ hostvars['server2'].ansible_default_ipv4.address }}:4040'
               scrape_interval: 10s
         dest: /etc/prometheus/prometheus.yml
       notify: restart prometheus
@@ -222,7 +222,7 @@
   become: yes
   
   vars:
-    prometheus_host: "vm3"  # или IP адрес Prometheus, например "10.128.0.12"
+    prometheus_host: "prometheus"  
     
   tasks:
     # Точное выполнение ваших команд
@@ -309,7 +309,7 @@
   become: yes
   
   vars:
-    elasticsearch_ip: "vm5"
+    elasticsearch_ip: "elasticsearch"
     
   tasks:
     # 1. Добавить репозиторий

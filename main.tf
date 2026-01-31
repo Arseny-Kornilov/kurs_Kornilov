@@ -17,12 +17,13 @@ resource "yandex_vpc_route_table" "main_rt" {
   }
 }
 
+
 # Subnet A - Private
 
 resource "yandex_vpc_subnet" "foo1" {
   zone           = "ru-central1-a"
   network_id     = yandex_vpc_network.main.id
-  v4_cidr_blocks = ["10.5.0.0/24"]
+  v4_cidr_blocks = ["10.6.0.0/24"]
   route_table_id = yandex_vpc_route_table.main_rt.id
 }
 
@@ -41,7 +42,8 @@ resource "yandex_vpc_subnet" "foo3" {
   name           = "public-subnet"
   zone           = "ru-central1-d"
   network_id     = yandex_vpc_network.main.id
-  v4_cidr_blocks = ["192.168.1.0/24"]
+  v4_cidr_blocks = ["10.10.0.0/24"]  
+  route_table_id = yandex_vpc_route_table.main_rt.id
 }
 
 # Security Group для внутренней сети
@@ -54,7 +56,10 @@ resource "yandex_vpc_security_group" "private_network_sg" {
   ingress {
     description    = "Allow all inside private subnet"
     protocol       = "ANY"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0]]
+    v4_cidr_blocks = [
+      yandex_vpc_subnet.foo1.v4_cidr_blocks[0],
+      yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0],
+    ]
   }
 
   ingress {
@@ -107,24 +112,18 @@ resource "yandex_vpc_security_group" "web_servers_sg" {
   description = "Security group for web servers in private subnet"
   network_id  = yandex_vpc_network.main.id
 
+  ingress {
+    description       = "Allow SSH from Bastion"
+    protocol          = "TCP"
+    v4_cidr_blocks = [yandex_vpc_subnet.foo3.v4_cidr_blocks[0]]
+    port              = 22
+  }
   # HTTP/HTTPS от ALB (публичная подсеть)
   ingress {
     description       = "Allow HTTP from ALB SG"
     protocol          = "TCP"
     security_group_id = yandex_vpc_security_group.alb_sg.id
     port              = 80
-  }
-
-  # SSH только из приватной подсети (для администрирования)
-  ingress {
-    description    = "Allow SSH from private subnet"
-    protocol       = "TCP"
-    v4_cidr_blocks = [   
-      yandex_vpc_subnet.foo1.v4_cidr_blocks[0],        # ru-central1-a
-      yandex_vpc_subnet.foo2_new.v4_cidr_blocks[0],
-      yandex_vpc_subnet.foo3.v4_cidr_blocks[0], 
-    ]
-    port           = 22
   }
 
   # Метрики для Prometheus (из приватной подсети)
@@ -157,6 +156,12 @@ resource "yandex_vpc_security_group" "prometheus_sg" {
   description = "Security group for Prometheus in private subnet"
   network_id  = yandex_vpc_network.main.id
 
+  ingress {
+    description       = "Allow SSH from Bastion"
+    protocol          = "TCP"
+    security_group_id = yandex_vpc_security_group.bastion_sg.id
+    port              = 22
+  }
   # Веб-интерфейс Prometheus - доступ из приватной подсети
   ingress {
     description    = "Allow Prometheus UI from private subnet"
@@ -187,6 +192,12 @@ resource "yandex_vpc_security_group" "elasticsearch_sg" {
   description = "Security group for Elasticsearch in private subnet"
   network_id  = yandex_vpc_network.main.id
 
+  ingress {
+    description       = "Allow SSH from Bastion"
+    protocol          = "TCP"
+    security_group_id = yandex_vpc_security_group.bastion_sg.id
+    port              = 22
+  }
   # API для Filebeat (из приватной подсети)
   ingress {
     description    = "Allow Elasticsearch API from private subnet"
@@ -197,9 +208,9 @@ resource "yandex_vpc_security_group" "elasticsearch_sg" {
 
   # Для Kibana (публичная подсеть)
   ingress {
-    description    = "Allow Kibana access from public subnet"
+    description    = "Allow Kibana access"
     protocol       = "TCP"
-    v4_cidr_blocks = [yandex_vpc_subnet.foo3.v4_cidr_blocks[0]]
+    security_group_id = yandex_vpc_security_group.kibana_sg.id
     port           = 9200
   }
 
@@ -330,7 +341,7 @@ resource "yandex_compute_instance" "vm1" {
   metadata = {
     user-data          = file("./cloud-init.yml") # Используйте file() для чтения файла
     serial-port-enable = 1
-    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("/home/vboxuser/.ssh/id_ed25519.pub")}"
   }
 }
 
@@ -366,7 +377,7 @@ resource "yandex_compute_instance" "vm2" {
   metadata = {
     user-data          = file("./cloud-init.yml") # Используйте file() для чтения файла
     serial-port-enable = 1
-    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("/home/vboxuser/.ssh/id_ed25519.pub")}"
   }
 }
 
@@ -402,7 +413,7 @@ resource "yandex_compute_instance" "vm3" {
   metadata = {
     user-data          = file("./cloud-init.yml") # Используйте file() для чтения файла
     serial-port-enable = 1
-    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("/home/vboxuser/.ssh/id_ed25519.pub")}"
   }
 }
 
@@ -435,7 +446,7 @@ resource "yandex_compute_instance" "vm4" {
   metadata = {
     user-data          = file("./cloud-init.yml")
     serial-port-enable = 1
-    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("/home/vboxuser/.ssh/id_ed25519.pub")}"
   }
 }
 
@@ -471,7 +482,7 @@ resource "yandex_compute_instance" "vm5" {
   metadata = {
     user-data          = file("./cloud-init.yml")
     serial-port-enable = 1
-    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("/home/vboxuser/.ssh/id_ed25519.pub")}"
   }
 }
 
@@ -504,7 +515,7 @@ resource "yandex_compute_instance" "vm6" {
   metadata = {
     user-data          = file("./cloud-init.yml")
     serial-port-enable = 1
-    ssh-keys           = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys           = "vboxuser:${file("/home/vboxuser/.ssh/id_ed25519.pub")}"
   }
 }
 
@@ -534,7 +545,7 @@ resource "yandex_compute_instance" "bastion" {
   }
 
   metadata = {
-    ssh-keys = "vboxuser:${file("~/.ssh/id_ed25519.pub")}"
+    ssh-keys = "vboxuser:${file("/home/vboxuser/.ssh/id_ed25519.pub")}"
   }
 }
 
