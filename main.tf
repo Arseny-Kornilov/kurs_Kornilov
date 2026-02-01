@@ -23,7 +23,7 @@ resource "yandex_vpc_route_table" "main_rt" {
 resource "yandex_vpc_subnet" "foo1" {
   zone           = "ru-central1-a"
   network_id     = yandex_vpc_network.main.id
-  v4_cidr_blocks = ["10.6.0.0/24"]
+  v4_cidr_blocks = ["10.7.1.0/24"]
   route_table_id = yandex_vpc_route_table.main_rt.id
 }
 
@@ -234,7 +234,7 @@ resource "yandex_vpc_security_group" "grafana_sg" {
   ingress {
     description       = "Allow SSH from Bastion"
     protocol          = "TCP"
-    security_group_id = yandex_vpc_security_group.bastion_sg.id
+    v4_cidr_blocks = [yandex_vpc_subnet.foo3.v4_cidr_blocks[0]] 
     port              = 22
   }
 
@@ -265,7 +265,7 @@ resource "yandex_vpc_security_group" "kibana_sg" {
   ingress {
     description       = "Allow SSH from Bastion"
     protocol          = "TCP"
-    security_group_id = yandex_vpc_security_group.bastion_sg.id
+    v4_cidr_blocks = [yandex_vpc_subnet.foo3.v4_cidr_blocks[0]] 
     port              = 22
   }
 
@@ -314,7 +314,7 @@ resource "yandex_vpc_security_group" "alb_sg" {
 resource "yandex_compute_instance" "vm1" {
   name        = "server1"
   platform_id = "standard-v3"
-  zone        = "ru-central1-a"
+  zone        = "ru-central1-b"
 
   boot_disk {
     initialize_params {
@@ -331,7 +331,7 @@ resource "yandex_compute_instance" "vm1" {
   # Network interface
   network_interface {
     index     = 0
-    subnet_id = yandex_vpc_subnet.foo1.id
+    subnet_id = yandex_vpc_subnet.foo2_new.id
     nat       = false
     security_group_ids = [
       yandex_vpc_security_group.private_network_sg.id,
@@ -555,7 +555,7 @@ resource "yandex_alb_target_group" "tg" {
   name = "target-group"
 
   target {
-    subnet_id  = yandex_vpc_subnet.foo1.id
+    subnet_id  = yandex_vpc_subnet.foo2_new.id
     ip_address = yandex_compute_instance.vm1.network_interface[0].ip_address
   }
 

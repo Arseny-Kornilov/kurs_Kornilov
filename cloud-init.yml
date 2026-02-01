@@ -4,5 +4,5 @@ users:
     groups: sudo
     shell: /bin/bash
     sudo: ["ALL=(ALL) NOPASSWD:ALL"]
-    ssh-authorized-keys:
+    ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq1BjHIcQkqWqPLE5K7kyxzdnmtd3kV3guRt85Nxjnl vboxuser@Ubuntu
